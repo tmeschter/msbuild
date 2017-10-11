@@ -146,18 +146,44 @@ namespace Microsoft.Build.Construction
                 DetermineWhetherToLoadReadOnly(new Uri(reader.BaseURI).LocalPath);
             }
 
-            // Set the line info source if it is available given the specific implementation of XmlReader
-            // we've been given.
-            _reader = reader as IXmlLineInfo;
+            var ignoreComments = reader.Settings.IgnoreComments;
+            var ignoreProcessingInstructions = reader.Settings.IgnoreProcessingInstructions;
+            var ignoreWhitespace = reader.Settings.IgnoreWhitespace;
 
-            // This call results in calls to our CreateElement and CreateAttribute methods,
-            // which use this.reader within themselves.
-            base.Load(reader);
+            try
+            {
+                // If we're loading a project read-only, then we don't need to bother reading
+                // comments, whitespace, or processing instructions.
+                if (_loadAsReadOnly ?? false)
+                {
+                    reader.Settings.IgnoreComments = true;
+                    reader.Settings.IgnoreProcessingInstructions = true;
+                    reader.Settings.IgnoreWhitespace = true;
+                }
 
-            // After load, the reader is no use for location information; it isn't updated when
-            // the document is edited. So null it out, so that elements and attributes created by subsequent
-            // editing don't have meaningless location information.
-            _reader = null;
+                // Set the line info source if it is available given the specific implementation of XmlReader
+                // we've been given.
+                _reader = reader as IXmlLineInfo;
+
+                // This call results in calls to our CreateElement and CreateAttribute methods,
+                // which use this.reader within themselves.
+                base.Load(reader);
+
+                // After load, the reader is no use for location information; it isn't updated when
+                // the document is edited. So null it out, so that elements and attributes created by subsequent
+                // editing don't have meaningless location information.
+                _reader = null;
+            }
+            finally
+            {
+                // Reset the settings on the reader if we tweaked them.
+                if (_loadAsReadOnly ?? false)
+                {
+                    reader.Settings.IgnoreComments = ignoreComments;
+                    reader.Settings.IgnoreProcessingInstructions = ignoreProcessingInstructions;
+                    reader.Settings.IgnoreWhitespace = ignoreWhitespace;
+                }
+            }
         }
 
 #if FEATURE_XML_LOADPATH
